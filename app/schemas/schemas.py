@@ -82,6 +82,20 @@ class GroupOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MemberOut(BaseModel):
+    user_id: uuid.UUID
+    display_name: str
+    email: str
+    role: str  # "admin" | "member"
+    joined_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class MemberRoleUpdate(BaseModel):
+    role: str = Field(..., pattern="^(admin|member)$")
+
+
 # ── Expenses ──────────────────────────────────────────────────────────────────
 
 class SplitIn(BaseModel):

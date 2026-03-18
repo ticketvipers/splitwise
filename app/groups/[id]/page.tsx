@@ -3,16 +3,24 @@ import { useApp } from '../../../context/AppContext';
 import { computeBalances, getMemberName } from '../../../lib/balances';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useState } from 'react';
 
 export default function GroupPage() {
   const { id } = useParams<{ id: string }>();
-  const { groups, expenses } = useApp();
+  const { groups, expenses, setGroups } = useApp();
+  const [showMembers, setShowMembers] = useState(false);
 
   const group = groups.find(g => g.id === id);
   if (!group) return <div className="text-center py-20 text-gray-400">Group not found.</div>;
 
   const groupExpenses = expenses.filter(e => e.groupId === id);
   const balances = computeBalances(groupExpenses, group.members);
+
+  const removeMember = (memberId: string) => {
+    setGroups(prev => prev.map(g =>
+      g.id === id ? { ...g, members: g.members.filter(m => m.id !== memberId) } : g
+    ));
+  };
 
   return (
     <div className="space-y-6">
@@ -21,7 +29,7 @@ export default function GroupPage() {
         <div>
           <Link href="/" className="text-sm text-gray-400 hover:text-gray-600">← Dashboard</Link>
           <h1 className="text-2xl font-bold text-gray-800 mt-1">{group.name}</h1>
-          <p className="text-sm text-gray-400">{group.members.map(m => m.name).join(', ')}</p>
+          <p className="text-sm text-gray-400">{group.members.length} member{group.members.length !== 1 ? 's' : ''}</p>
         </div>
         <Link
           href={`/groups/${id}/expenses/new`}
@@ -30,6 +38,52 @@ export default function GroupPage() {
         >
           + Add Expense
         </Link>
+      </div>
+
+      {/* Members */}
+      <div className="bg-white rounded-xl shadow-sm p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-gray-700">Members</h2>
+          <button
+            onClick={() => setShowMembers(v => !v)}
+            className="text-sm text-[#5BC5A7] hover:underline"
+          >
+            {showMembers ? 'Hide' : 'Show'} members
+          </button>
+        </div>
+        {showMembers && (
+          <div className="space-y-2">
+            {group.members.map((m, idx) => (
+              <div key={m.id} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-800">{m.name}</span>
+                  {idx === 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-xs bg-[#e6f7f3] text-[#3a9a82] font-medium">Owner</span>
+                  )}
+                  {idx > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500 font-medium">Member</span>
+                  )}
+                </div>
+                {idx > 0 && (
+                  <button
+                    onClick={() => removeMember(m.id)}
+                    className="text-xs text-red-400 hover:text-red-600"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            ))}
+            <div className="pt-2 border-t border-gray-100">
+              <Link
+                href={`/groups/${id}/members/invite`}
+                className="text-sm text-[#5BC5A7] hover:underline"
+              >
+                + Invite member
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Balances */}
@@ -91,3 +145,4 @@ export default function GroupPage() {
     </div>
   );
 }
+

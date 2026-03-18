@@ -1,6 +1,5 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -14,6 +13,8 @@ from app.schemas.schemas import (
     GroupOut,
     GroupBalances,
     BalanceEntry,
+    MemberOut,
+    MemberRoleUpdate,
     PaginatedResponse,
 )
 from app.services.balance_service import compute_balances
@@ -151,6 +152,139 @@ async def get_group_balances(
     ]
 
     return GroupBalances(group_id=group_id, balances=balance_entries, net=net)
+
+
+@router.delete("/{group_id}", status_code=204)
+async def delete_group(
+    group_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a group. Only the group owner (admin who created it) can delete."""
+    group = await _get_group_or_404(db, group_id, current_user.id)
+    if group.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the group owner can delete this group")
+    await db.delete(group)
+    await db.commit()
+
+
+@router.get("/{group_id}/members", response_model=list[MemberOut])
+async def list_members(
+    group_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all members of a group with their roles."""
+    await _get_group_or_404(db, group_id, current_user.id)
+    result = await db.execute(
+        select(Membership, User)
+        .join(User, User.id == Membership.user_id)
+        .where(Membership.group_id == group_id)
+        .order_by(Membership.joined_at)
+    )
+    rows = result.all()
+    return [
+        MemberOut(
+            user_id=m.user_id,
+            display_name=u.display_name,
+            email=u.email,
+            role=m.role,
+            joined_at=m.joined_at,
+        )
+        for m, u in rows
+    ]
+
+
+@router.patch("/{group_id}/members/{user_id}/role", response_model=MemberOut)
+async def update_member_role(
+    group_id: uuid.UUID,
+    user_id: uuid.UUID,
+    body: MemberRoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update a member's role. Only group admins can change roles."""
+    await _get_group_or_404(db, group_id, current_user.id)
+    # Require admin
+    admin_result = await db.execute(
+        select(Membership).where(
+            Membership.group_id == group_id,
+            Membership.user_id == current_user.id,
+            Membership.role == "admin",
+        )
+    )
+    if not admin_result.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="Only group admins can change member roles")
+
+    # Cannot demote the owner (created_by)
+    group_result = await db.execute(select(Group).where(Group.id == group_id))
+    group = group_result.scalar_one()
+    if group.created_by == user_id and body.role != "admin":
+        raise HTTPException(status_code=400, detail="Cannot demote the group owner")
+
+    target_result = await db.execute(
+        select(Membership, User)
+        .join(User, User.id == Membership.user_id)
+        .where(Membership.group_id == group_id, Membership.user_id == user_id)
+    )
+    row = target_result.one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Member not found in this group")
+
+    membership, user = row
+    membership.role = body.role
+    await db.commit()
+    return MemberOut(
+        user_id=membership.user_id,
+        display_name=user.display_name,
+        email=user.email,
+        role=membership.role,
+        joined_at=membership.joined_at,
+    )
+
+
+@router.delete("/{group_id}/members/{user_id}", status_code=204)
+async def remove_member(
+    group_id: uuid.UUID,
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove a member from a group. Admins can remove anyone; members can only leave themselves."""
+    await _get_group_or_404(db, group_id, current_user.id)
+
+    # Determine permissions
+    current_membership_result = await db.execute(
+        select(Membership).where(
+            Membership.group_id == group_id,
+            Membership.user_id == current_user.id,
+        )
+    )
+    current_membership = current_membership_result.scalar_one_or_none()
+    is_admin = current_membership and current_membership.role == "admin"
+    is_self = current_user.id == user_id
+
+    if not is_admin and not is_self:
+        raise HTTPException(status_code=403, detail="You can only remove yourself or must be an admin")
+
+    # Prevent removing the owner
+    group_result = await db.execute(select(Group).where(Group.id == group_id))
+    group = group_result.scalar_one()
+    if group.created_by == user_id:
+        raise HTTPException(status_code=400, detail="Cannot remove the group owner; transfer ownership first")
+
+    target_result = await db.execute(
+        select(Membership).where(
+            Membership.group_id == group_id,
+            Membership.user_id == user_id,
+        )
+    )
+    membership = target_result.scalar_one_or_none()
+    if not membership:
+        raise HTTPException(status_code=404, detail="Member not found in this group")
+
+    await db.delete(membership)
+    await db.commit()
 
 
 async def _get_group_or_404(db: AsyncSession, group_id: uuid.UUID, user_id: uuid.UUID) -> Group:

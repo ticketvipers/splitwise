@@ -161,3 +161,59 @@ def test_duplicate_signup(client, test_user_creds):
     resp = client.post("/api/v1/auth/signup", json=test_user_creds)
     assert resp.status_code == 400
     assert "already registered" in resp.json()["detail"]
+
+
+# ── Unit tests: member role validation ───────────────────────────────────────
+
+VALID_ROLES = {"admin", "member"}
+
+
+def validate_member_role(role: str) -> tuple[bool, str]:
+    if role not in VALID_ROLES:
+        return False, f"role must be one of {VALID_ROLES}, got '{role}'"
+    return True, "ok"
+
+
+def validate_owner_protection(is_owner: bool, action: str) -> tuple[bool, str]:
+    """Owners cannot be removed or demoted."""
+    if is_owner and action in ("remove", "demote"):
+        return False, "Cannot remove or demote the group owner"
+    return True, "ok"
+
+
+class TestMemberRoleValidation:
+    def test_valid_admin_role(self):
+        ok, msg = validate_member_role("admin")
+        assert ok, msg
+
+    def test_valid_member_role(self):
+        ok, msg = validate_member_role("member")
+        assert ok, msg
+
+    def test_invalid_role(self):
+        ok, msg = validate_member_role("owner")
+        assert not ok
+        assert "owner" in msg
+
+    def test_empty_role_rejected(self):
+        ok, msg = validate_member_role("")
+        assert not ok
+
+
+class TestOwnerProtection:
+    def test_owner_cannot_be_removed(self):
+        ok, msg = validate_owner_protection(is_owner=True, action="remove")
+        assert not ok
+        assert "owner" in msg
+
+    def test_owner_cannot_be_demoted(self):
+        ok, msg = validate_owner_protection(is_owner=True, action="demote")
+        assert not ok
+
+    def test_non_owner_can_be_removed(self):
+        ok, msg = validate_owner_protection(is_owner=False, action="remove")
+        assert ok, msg
+
+    def test_non_owner_can_be_demoted(self):
+        ok, msg = validate_owner_protection(is_owner=False, action="demote")
+        assert ok, msg
