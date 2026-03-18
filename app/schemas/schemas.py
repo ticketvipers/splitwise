@@ -7,6 +7,30 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
+T = TypeVar("T")
+
+
+# ── Error Responses ───────────────────────────────────────────────────────────
+
+class ErrorDetail(BaseModel):
+    code: str  # machine-readable error code e.g. "not_found", "forbidden"
+    message: str
+    field: Optional[str] = None  # for validation errors
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorDetail
+
+
+# ── Pagination ────────────────────────────────────────────────────────────────
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    items: list[T]
+    total: int
+    page: int
+    page_size: int
+    has_next: bool
+
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -74,7 +98,7 @@ class ExpenseCreate(BaseModel):
 
 class ExpenseUpdate(BaseModel):
     description: Optional[str] = None
-    amount: Optional[Decimal] = None
+    amount: Optional[Decimal] = Field(default=None, gt=0)
     currency: Optional[str] = None
 
 
@@ -95,6 +119,7 @@ class ExpenseOut(BaseModel):
     amount: Decimal
     currency: str
     created_at: datetime
+    updated_at: Optional[datetime] = None
     splits: list[SplitOut]
 
     model_config = {"from_attributes": True}
@@ -152,3 +177,4 @@ class InviteOut(BaseModel):
 class JoinResponse(BaseModel):
     group: GroupOut
     message: str = "Successfully joined group"
+

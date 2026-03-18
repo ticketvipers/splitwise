@@ -1,6 +1,6 @@
 import uuid
 from decimal import Decimal
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.models import Expense, Membership, Split, User
-from app.schemas.schemas import ExpenseCreate, ExpenseOut, ExpenseUpdate
+from app.schemas.schemas import ExpenseCreate, ExpenseOut, ExpenseUpdate, PaginatedResponse
 
 router = APIRouter(prefix="/groups/{group_id}/expenses", tags=["expenses"])
 
@@ -78,24 +78,42 @@ async def create_expense(
     return result.scalar_one()
 
 
-@router.get("", response_model=list[ExpenseOut])
+@router.get("", response_model=PaginatedResponse[ExpenseOut])
 async def list_expenses(
     group_id: uuid.UUID,
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=100),
+    response: Response,
+    page: int = Query(default=1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     await _assert_member(db, group_id, current_user.id)
-    result = await db.execute(
+    response.headers["X-API-Change"] = "list-endpoints-now-paginated"
+
+    from sqlalchemy import func as sqlfunc
+    base_query = (
         select(Expense)
-        .options(selectinload(Expense.splits))
         .where(Expense.group_id == group_id)
         .order_by(Expense.created_at.desc())
-        .offset(skip)
-        .limit(limit)
     )
-    return result.scalars().all()
+    count_result = await db.execute(
+        select(sqlfunc.count()).select_from(base_query.subquery())
+    )
+    total = count_result.scalar_one()
+
+    offset = (page - 1) * page_size
+    result = await db.execute(
+        base_query.options(selectinload(Expense.splits)).offset(offset).limit(page_size)
+    )
+    items = result.scalars().all()
+
+    return PaginatedResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_next=(offset + len(items)) < total,
+    )
 
 
 async def _get_expense_or_404(db: AsyncSession, group_id: uuid.UUID, expense_id: uuid.UUID) -> Expense:
@@ -123,6 +141,17 @@ async def _assert_can_modify(db: AsyncSession, group_id: uuid.UUID, expense: Exp
     raise HTTPException(status_code=403, detail="Not authorized to modify this expense")
 
 
+@router.get("/{expense_id}", response_model=ExpenseOut)
+async def get_expense(
+    group_id: uuid.UUID,
+    expense_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _assert_member(db, group_id, current_user.id)
+    return await _get_expense_or_404(db, group_id, expense_id)
+
+
 @router.patch("/{expense_id}", response_model=ExpenseOut)
 async def update_expense(
     group_id: uuid.UUID,
@@ -137,10 +166,24 @@ async def update_expense(
 
     if body.description is not None:
         expense.description = body.description
-    if body.amount is not None:
-        expense.amount = body.amount
     if body.currency is not None:
         expense.currency = body.currency
+    if body.amount is not None and body.amount != expense.amount:
+        old_amount = Decimal(str(expense.amount))
+        new_amount = Decimal(str(body.amount))
+        expense.amount = new_amount
+
+        # Recalculate splits proportionally, absorbing rounding into last split
+        splits = expense.splits
+        if splits and old_amount:
+            scaled = [
+                round(Decimal(str(s.amount)) / old_amount * new_amount, 2)
+                for s in splits
+            ]
+            remainder = new_amount - sum(scaled)
+            scaled[-1] += remainder
+            for split, new_split_amount in zip(splits, scaled):
+                split.amount = new_split_amount
 
     await db.commit()
     await db.refresh(expense)
