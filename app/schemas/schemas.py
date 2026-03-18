@@ -115,3 +115,17 @@ class SettlementOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ── Balances ──────────────────────────────────────────────────────────────────
+
+class BalanceEntry(BaseModel):
+    from_user_id: uuid.UUID
+    to_user_id: uuid.UUID
+    amount: Decimal
+
+
+class GroupBalances(BaseModel):
+    group_id: uuid.UUID
+    balances: list[BalanceEntry]
+    net: dict[str, Decimal]  # user_id -> net amount (positive = owed, negative = owes)
