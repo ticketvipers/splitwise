@@ -1,5 +1,6 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -8,6 +9,8 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.models import Expense, Group, Membership, Settlement, User
 from app.schemas.schemas import (
+    ErrorDetail,
+    ErrorResponse,
     GroupCreate,
     GroupUpdate,
     GroupOut,
@@ -100,6 +103,9 @@ async def update_group(
         raise HTTPException(
             status_code=403,
             detail="Only group admins can update group details",
+            detail=ErrorResponse(
+                error=ErrorDetail(code="forbidden", message="Only group admins can update group details")
+            ).model_dump(),
         )
     if body.name is not None:
         group.name = body.name
@@ -160,5 +166,10 @@ async def _get_group_or_404(db: AsyncSession, group_id: uuid.UUID, user_id: uuid
     )
     group = result.scalar_one_or_none()
     if not group:
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error=ErrorDetail(code="not_found", message="Group not found")
+            ).model_dump(),
+        )
     return group

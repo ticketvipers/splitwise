@@ -1,6 +1,8 @@
 import uuid
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -9,6 +11,7 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.models import Expense, Membership, Split, User
 from app.schemas.schemas import ExpenseCreate, ExpenseOut, ExpenseUpdate, PaginatedResponse
+from app.schemas.schemas import ExpenseCreate, ExpenseOut, PaginatedResponse
 
 router = APIRouter(prefix="/groups/{group_id}/expenses", tags=["expenses"])
 
@@ -203,3 +206,27 @@ async def delete_expense(
 
     await db.delete(expense)
     await db.commit()
+
+    base_query = (
+        select(Expense)
+        .where(Expense.group_id == group_id)
+        .order_by(Expense.created_at.desc())
+    )
+    count_result = await db.execute(
+        select(func.count()).select_from(base_query.subquery())
+    )
+    total = count_result.scalar_one()
+
+    offset = (page - 1) * page_size
+    result = await db.execute(
+        base_query.options(selectinload(Expense.splits)).offset(offset).limit(page_size)
+    )
+    items = result.scalars().all()
+
+    return PaginatedResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_next=(offset + len(items)) < total,
+    )
