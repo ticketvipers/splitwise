@@ -1,3 +1,5 @@
+import secrets
+import time
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +19,29 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
+
+# In-memory stores (suitable for single-process deployments)
+# state → timestamp (expires after 10 minutes)
+_oauth_states: dict[str, float] = {}
+_OAUTH_STATE_TTL = 600  # seconds
+
+# exchange_code → (jwt, timestamp) (expires after 60 seconds)
+_exchange_codes: dict[str, tuple[str, float]] = {}
+_EXCHANGE_CODE_TTL = 60  # seconds
+
+
+def _purge_expired_states():
+    now = time.time()
+    expired = [k for k, ts in _oauth_states.items() if now - ts > _OAUTH_STATE_TTL]
+    for k in expired:
+        del _oauth_states[k]
+
+
+def _purge_expired_codes():
+    now = time.time()
+    expired = [k for k, (_, ts) in _exchange_codes.items() if now - ts > _EXCHANGE_CODE_TTL]
+    for k in expired:
+        del _exchange_codes[k]
 
 
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -52,6 +77,11 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
 async def google_login():
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=501, detail="Google OAuth is not configured")
+
+    _purge_expired_states()
+    state = secrets.token_urlsafe(16)
+    _oauth_states[state] = time.time()
+
     params = urllib.parse.urlencode({
         "client_id": settings.GOOGLE_CLIENT_ID,
         "redirect_uri": settings.GOOGLE_REDIRECT_URI,
@@ -59,14 +89,23 @@ async def google_login():
         "scope": "openid email profile",
         "access_type": "offline",
         "prompt": "select_account",
+        "state": state,
     })
     return RedirectResponse(url=f"{GOOGLE_AUTH_URL}?{params}")
 
 
 @router.get("/google/callback")
-async def google_callback(code: str, db: AsyncSession = Depends(get_db)):
+async def google_callback(code: str, state: str | None = None, db: AsyncSession = Depends(get_db)):
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=501, detail="Google OAuth is not configured")
+
+    # Verify CSRF state parameter
+    _purge_expired_states()
+    if not state or state not in _oauth_states:
+        raise HTTPException(status_code=400, detail="Invalid or missing OAuth state parameter")
+    state_ts = _oauth_states.pop(state)
+    if time.time() - state_ts > _OAUTH_STATE_TTL:
+        raise HTTPException(status_code=400, detail="OAuth state parameter expired")
 
     async with httpx.AsyncClient() as client:
         token_resp = await client.post(GOOGLE_TOKEN_URL, data={
@@ -111,5 +150,31 @@ async def google_callback(code: str, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(user)
 
-    token = create_access_token({"sub": str(user.id)})
-    return RedirectResponse(url=f"{settings.FRONTEND_URL}/auth/callback?token={token}")
+    jwt = create_access_token({"sub": str(user.id)})
+
+    # Issue a short-lived exchange code instead of putting JWT in the redirect URL
+    _purge_expired_codes()
+    exchange_code = secrets.token_urlsafe(32)
+    _exchange_codes[exchange_code] = (jwt, time.time())
+
+    return RedirectResponse(url=f"{settings.FRONTEND_URL}/auth/callback?code={exchange_code}")
+
+
+@router.post("/exchange", response_model=TokenResponse)
+async def exchange_code(request: Request):
+    """Exchange a one-time code (from OAuth callback) for a JWT access token."""
+    body = await request.json()
+    code = body.get("code")
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing exchange code")
+
+    _purge_expired_codes()
+    entry = _exchange_codes.pop(code, None)
+    if entry is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired exchange code")
+
+    jwt, ts = entry
+    if time.time() - ts > _EXCHANGE_CODE_TTL:
+        raise HTTPException(status_code=400, detail="Exchange code expired")
+
+    return TokenResponse(access_token=jwt)
