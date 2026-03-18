@@ -1,0 +1,23 @@
+name: Frontend CI
+on:
+  pull_request:
+    paths: ['splitwise-app/**']
+  push:
+    branches: [main]
+    paths: ['splitwise-app/**']
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: splitwise-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: splitwise-app/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
