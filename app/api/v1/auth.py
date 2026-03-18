@@ -64,7 +64,7 @@ async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depen
     await db.refresh(user)
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    return TokenResponse(id=user.id, access_token=access_token, refresh_token=refresh_token)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -76,7 +76,7 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
         raise HTTPException(status_code=401, detail="Invalid credentials")
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    return TokenResponse(id=user.id, access_token=access_token, refresh_token=refresh_token)
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -102,7 +102,7 @@ async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
     _revoked_refresh_tokens.add(token)
     new_access = create_access_token({"sub": str(user.id)})
     new_refresh = create_refresh_token({"sub": str(user.id)})
-    return TokenResponse(access_token=new_access, refresh_token=new_refresh)
+    return TokenResponse(id=user.id, access_token=new_access, refresh_token=new_refresh)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
