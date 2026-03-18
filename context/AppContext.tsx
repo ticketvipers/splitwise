@@ -1,7 +1,7 @@
 'use client';
 import React, { createContext, useContext, ReactNode, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Group, Expense } from '../lib/types';
+import { Group, Expense, Settlement } from '../lib/types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 interface AppContextType {
@@ -9,6 +9,8 @@ interface AppContextType {
   setGroups: (v: Group[] | ((prev: Group[]) => Group[])) => void;
   expenses: Expense[];
   setExpenses: (v: Expense[] | ((prev: Expense[]) => Expense[])) => void;
+  settlements: Settlement[];
+  setSettlements: (v: Settlement[] | ((prev: Settlement[]) => Settlement[])) => void;
   token: string | null;
   setToken: (token: string | null) => void;
   isAuthenticated: boolean;
@@ -20,6 +22,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [groups, setGroups] = useLocalStorage<Group[]>('splitwise_groups', []);
   const [expenses, setExpenses] = useLocalStorage<Expense[]>('splitwise_expenses', []);
+  const [settlements, setSettlements] = useLocalStorage<Settlement[]>('splitwise_settlements', []);
   const [token, setTokenState] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,7 +54,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!token;
 
   return (
-    <AppContext.Provider value={{ groups, setGroups, expenses, setExpenses, token, setToken, isAuthenticated }}>
+    <AppContext.Provider value={{ groups, setGroups, expenses, setExpenses, settlements, setSettlements, token, setToken, isAuthenticated }}>
       {children}
     </AppContext.Provider>
   );

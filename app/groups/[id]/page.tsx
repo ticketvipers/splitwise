@@ -6,13 +6,14 @@ import { useParams } from 'next/navigation';
 
 export default function GroupPage() {
   const { id } = useParams<{ id: string }>();
-  const { groups, expenses } = useApp();
+  const { groups, expenses, settlements } = useApp();
 
   const group = groups.find(g => g.id === id);
   if (!group) return <div className="text-center py-20 text-gray-400">Group not found.</div>;
 
   const groupExpenses = expenses.filter(e => e.groupId === id);
-  const balances = computeBalances(groupExpenses, group.members);
+  const groupSettlements = settlements.filter(s => s.groupId === id);
+  const balances = computeBalances(groupExpenses, group.members, groupSettlements);
 
   return (
     <div className="space-y-6">

@@ -34,3 +34,13 @@ export interface Balance {
   to: string;   // member id
   amount: number;
 }
+
+export interface Settlement {
+  id: string;
+  groupId: string;
+  payerId: string;  // who paid
+  payeeId: string;  // who received
+  amount: number;
+  note?: string;
+  createdAt: string;
+}
