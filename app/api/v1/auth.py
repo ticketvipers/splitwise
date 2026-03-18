@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.db.session import get_db
-from app.main import limiter
+from app.core.limiter import limiter
 from app.models.models import User
 from app.schemas.schemas import SignupRequest, LoginRequest, TokenResponse, UserOut
 
