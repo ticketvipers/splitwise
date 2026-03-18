@@ -1,13 +1,20 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.models import Expense, Group, Membership, Settlement, User
-from app.schemas.schemas import GroupCreate, GroupUpdate, GroupOut, GroupBalances, BalanceEntry
+from app.schemas.schemas import (
+    GroupCreate,
+    GroupUpdate,
+    GroupOut,
+    GroupBalances,
+    BalanceEntry,
+    PaginatedResponse,
+)
 from app.services.balance_service import compute_balances
 
 router = APIRouter(prefix="/groups", tags=["groups"])
@@ -29,17 +36,37 @@ async def create_group(
     return group
 
 
-@router.get("", response_model=list[GroupOut])
+@router.get("", response_model=PaginatedResponse[GroupOut])
 async def list_groups(
+    response: Response,
+    page: int = Query(default=1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
+    response.headers["X-API-Change"] = "list-endpoints-now-paginated"
+
+    base_query = (
         select(Group)
         .join(Membership, Membership.group_id == Group.id)
         .where(Membership.user_id == current_user.id)
     )
-    return result.scalars().all()
+    count_result = await db.execute(
+        select(func.count()).select_from(base_query.subquery())
+    )
+    total = count_result.scalar_one()
+
+    offset = (page - 1) * page_size
+    result = await db.execute(base_query.offset(offset).limit(page_size))
+    items = result.scalars().all()
+
+    return PaginatedResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_next=(offset + len(items)) < total,
+    )
 
 
 @router.get("/{group_id}", response_model=GroupOut)
@@ -70,7 +97,10 @@ async def update_group(
         )
     )
     if not result.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail="Only group admins can update group details")
+        raise HTTPException(
+            status_code=403,
+            detail="Only group admins can update group details",
+        )
     if body.name is not None:
         group.name = body.name
     if body.description is not None:

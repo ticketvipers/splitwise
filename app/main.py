@@ -1,6 +1,10 @@
 import os
-from fastapi import FastAPI, Request
+import uuid
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.limiter import limiter
@@ -21,6 +25,65 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+
+# ── Request ID middleware ──────────────────────────────────────────────────────
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+# ── Exception handlers ────────────────────────────────────────────────────────
+
+def _status_to_code(status: int) -> str:
+    return {
+        400: "bad_request",
+        401: "unauthorized",
+        403: "forbidden",
+        404: "not_found",
+        409: "conflict",
+        422: "validation_error",
+        429: "rate_limited",
+        500: "internal_error",
+    }.get(status, "error")
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    request_id = getattr(request.state, "request_id", None)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": _status_to_code(exc.status_code),
+                "message": exc.detail,
+            },
+            "request_id": request_id,
+        },
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    request_id = getattr(request.state, "request_id", None)
+    errors = [
+        {
+            "code": "validation_error",
+            "message": str(e["msg"]),
+            "field": ".".join(str(x) for x in e["loc"]),
+        }
+        for e in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content={"errors": errors, "request_id": request_id},
+    )
+
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(groups.router, prefix="/api/v1")
