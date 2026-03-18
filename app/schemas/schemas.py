@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel, EmailStr, Field
 

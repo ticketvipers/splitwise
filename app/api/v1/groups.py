@@ -1,5 +1,6 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -100,6 +101,9 @@ async def update_group(
         raise HTTPException(
             status_code=403,
             detail="Only group admins can update group details",
+            detail=ErrorResponse(
+                error=ErrorDetail(code="forbidden", message="Only group admins can update group details")
+            ).model_dump(),
         )
     if body.name is not None:
         group.name = body.name

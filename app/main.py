@@ -10,7 +10,49 @@ from slowapi.errors import RateLimitExceeded
 from app.core.limiter import limiter
 from app.api.v1 import auth, groups, expenses, settlements
 
-app = FastAPI(title="Splitwise API", version="1.0.0")
+tags_metadata = [
+    {
+        "name": "auth",
+        "description": "User registration and authentication. Returns a Bearer JWT token.",
+    },
+    {
+        "name": "groups",
+        "description": "Manage expense groups, memberships, and view group balances.",
+    },
+    {
+        "name": "expenses",
+        "description": "Create, list, and manage expenses within a group.",
+    },
+    {
+        "name": "settlements",
+        "description": "Record and list payments between group members to settle debts.",
+    },
+    {
+        "name": "balances",
+        "description": "Compute net balances and simplified debt for a group.",
+    },
+]
+
+app = FastAPI(
+    title="Splitwise API",
+    description=(
+        "An API-first expense-sharing service. All protected endpoints require a "
+        "Bearer JWT token obtained from `/api/v1/auth/login`.\n\n"
+        "See `API_CONVENTIONS.md` in the repository for full versioning, error, "
+        "pagination, and ID conventions."
+    ),
+    version="1.0.0",
+    contact={
+        "name": "Splitwise API Support",
+        "url": "https://github.com/ticketvipers/splitwise",
+    },
+    license_info={
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT",
+    },
+    openapi_tags=tags_metadata,
+)
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -91,7 +133,36 @@ app.include_router(expenses.router, prefix="/api/v1")
 app.include_router(settlements.router, prefix="/api/v1")
 
 
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        contact=app.contact,
+        license_info=app.license_info,
+        tags=tags_metadata,
+        routes=app.routes,
+    )
+    # Add Bearer JWT security scheme
+    schema.setdefault("components", {})
+    schema["components"].setdefault("securitySchemes", {})
+    schema["components"]["securitySchemes"]["BearerAuth"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token obtained from POST /api/v1/auth/login",
+    }
+    # Apply security globally (individual public routes can override with [])
+    schema["security"] = [{"BearerAuth": []}]
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = custom_openapi  # type: ignore
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
-
