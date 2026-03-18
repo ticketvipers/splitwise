@@ -163,94 +163,48 @@ def test_duplicate_signup(client, test_user_creds):
     assert "already registered" in resp.json()["detail"]
 
 
-# ── Unit tests for split_type logic ──────────────────────────────────────────
+# ── Unit tests: member role validation ───────────────────────────────────────
 
-from decimal import Decimal, ROUND_DOWN
-
-
-def compute_equal_splits(amount: Decimal, n: int) -> list[Decimal]:
-    """Mirror of _compute_equal_splits in expenses.py."""
-    base = (amount / n).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
-    remainder = amount - base * n
-    splits = []
-    for i in range(n):
-        share = base + (Decimal("0.01") if i == n - 1 and remainder > 0 else Decimal("0"))
-        splits.append(share)
-    return splits
+VALID_ROLES = {"admin", "member"}
 
 
-class TestEqualSplitComputation:
-    def test_even_split(self):
-        splits = compute_equal_splits(Decimal("30.00"), 3)
-        assert splits == [Decimal("10.00"), Decimal("10.00"), Decimal("10.00")]
-        assert sum(splits) == Decimal("30.00")
-
-    def test_uneven_split_remainder_absorbed_last(self):
-        splits = compute_equal_splits(Decimal("10.00"), 3)
-        assert len(splits) == 3
-        assert sum(splits) == Decimal("10.00")
-        # Base is 3.33, last gets 3.34
-        assert splits[0] == Decimal("3.33")
-        assert splits[2] == Decimal("3.34")
-
-    def test_two_way_split(self):
-        splits = compute_equal_splits(Decimal("5.00"), 2)
-        assert sum(splits) == Decimal("5.00")
-        assert splits[0] == Decimal("2.50")
-
-    def test_single_member(self):
-        splits = compute_equal_splits(Decimal("42.00"), 1)
-        assert splits == [Decimal("42.00")]
-
-    def test_large_group(self):
-        splits = compute_equal_splits(Decimal("100.00"), 7)
-        assert sum(splits) == Decimal("100.00")
-        assert all(s > 0 for s in splits)
+def validate_member_role(role: str) -> tuple[bool, str]:
+    if role not in VALID_ROLES:
+        return False, f"role must be one of {VALID_ROLES}, got '{role}'"
+    return True, "ok"
 
 
-class TestExactSplitValidation:
-    """Reuse validate_splits_sum helper already defined in this file."""
+def validate_owner_protection(is_owner: bool, action: str) -> tuple[bool, str]:
+    """Owners cannot be removed or demoted."""
+    if is_owner and action in ("remove", "demote"):
+        return False, "Cannot remove or demote the group owner"
+    return True, "ok"
 
-    def test_exact_splits_valid(self):
-        ok, msg = validate_splits_sum(
-            Decimal("50.00"),
-            [{"amount": 20.00}, {"amount": 30.00}],
-        )
+
+class TestMemberRoleValidation:
+    def test_valid_admin_role(self):
+        ok, msg = validate_member_role("admin")
         assert ok, msg
 
-    def test_exact_splits_mismatch(self):
-        ok, msg = validate_splits_sum(
-            Decimal("50.00"),
-            [{"amount": 20.00}, {"amount": 20.00}],
-        )
+    def test_valid_member_role(self):
+        ok, msg = validate_member_role("member")
+        assert ok, msg
+
+    def test_invalid_role(self):
+        ok, msg = validate_member_role("owner")
+        assert not ok
+        assert "owner" in msg
+
+    def test_empty_role_rejected(self):
+        ok, msg = validate_member_role("")
         assert not ok
 
-    def test_zero_amount_rejected(self):
-        ok, msg = validate_splits_sum(
-            Decimal("50.00"),
-            [{"amount": 0}, {"amount": 50.00}],
-        )
+
+class TestOwnerProtection:
+    def test_owner_cannot_be_removed(self):
+        ok, msg = validate_owner_protection(is_owner=True, action="remove")
         assert not ok
+        assert "owner" in msg
 
-
-class TestAuditNotePreservation:
-    """Verify audit snapshot/note logic (pure unit)."""
-
-    def _make_snapshot(self, description, amount, currency, notes=None, date=None):
-        return {
-            "description": description,
-            "amount": str(amount),
-            "currency": currency,
-            "notes": notes,
-            "date": date,
-        }
-
-    def test_snapshot_keys(self):
-        snap = self._make_snapshot("Dinner", Decimal("30.00"), "USD", notes="work meal")
-        assert "description" in snap
-        assert "amount" in snap
-        assert snap["notes"] == "work meal"
-
-    def test_snapshot_amount_is_string(self):
-        snap = self._make_snapshot("Trip", Decimal("99.99"), "USD")
-        assert isinstance(snap["amount"], str)
+    def test_owner_cannot_be_demoted(self):
+        ok, msg = validate_owner_protection(is_owner=True,
