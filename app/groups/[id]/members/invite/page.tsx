@@ -1,19 +1,27 @@
 'use client';
-import { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { useApp } from '../../../../context/AppContext';
+
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useState } from 'react';
+import { useApp } from '../../../../../context/AppContext';
+import { Button } from '../../../../../components/ui/Button';
+import { ErrorState } from '../../../../../components/ui/ErrorState';
+import { Input } from '../../../../../components/ui/Input';
+import { ToastContainer } from '../../../../../components/ui/Toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function InviteMemberPage() {
   const { id } = useParams<{ id: string }>();
   const { token } = useApp();
-  const router = useRouter();
+
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [toasts, setToasts] = useState<Array<{ id: string; type?: 'success' | 'error' | 'info' | 'warning'; message: string }>>([]);
+
+  const dismissToast = (toastId: string) => setToasts((prev) => prev.filter((t) => t.id !== toastId));
 
   const generateInvite = async () => {
     setLoading(true);
@@ -22,13 +30,13 @@ export default function InviteMemberPage() {
       const res = await fetch(`${API_BASE}/api/v1/groups/${id}/invite`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data?.error?.message || 'Failed to generate invite link');
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error?.message || data?.detail || 'Failed to generate invite link');
       }
       const data = await res.json();
       setInviteUrl(data.join_url);
@@ -41,63 +49,61 @@ export default function InviteMemberPage() {
 
   const copyToClipboard = async () => {
     if (!inviteUrl) return;
-    await navigator.clipboard.writeText(inviteUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopied(true);
+      setToasts((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), type: 'success', message: 'Invite link copied to clipboard.' },
+      ]);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setToasts((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), type: 'error', message: 'Could not copy to clipboard.' },
+      ]);
+    }
   };
 
   return (
     <div className="max-w-lg">
-      <Link href={`/groups/${id}`} className="text-sm text-gray-400 hover:text-gray-600">← Back to group</Link>
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+      <Link href={`/groups/${id}`} className="text-sm text-gray-400 hover:text-gray-600">
+        ← Back to group
+      </Link>
       <h1 className="text-2xl font-bold text-gray-800 mt-2 mb-6">Invite Members</h1>
 
       <div className="bg-white rounded-xl shadow-sm p-6 space-y-5">
-        <div>
-          <p className="text-sm text-gray-600 mb-4">
-            Generate an invite link to share with people you want to add to this group.
-            The link expires in <strong>7 days</strong>.
-          </p>
+        <p className="text-sm text-gray-600">
+          Generate an invite link to share with people you want to add to this group. The link expires in{' '}
+          <strong>7 days</strong>.
+        </p>
 
-          {!inviteUrl ? (
-            <button
-              onClick={generateInvite}
-              disabled={loading}
-              className="w-full py-2.5 rounded-lg text-white font-medium disabled:opacity-50 transition-opacity"
-              style={{ backgroundColor: '#5BC5A7' }}
-            >
-              {loading ? 'Generating…' : 'Generate Invite Link'}
-            </button>
-          ) : (
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-gray-700">Invite link</label>
-              <div className="flex gap-2">
-                <input
-                  readOnly
-                  value={inviteUrl}
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700"
-                />
-                <button
-                  onClick={copyToClipboard}
-                  className="px-4 py-2 rounded-lg text-white font-medium text-sm transition-opacity"
-                  style={{ backgroundColor: copied ? '#3a9a82' : '#5BC5A7' }}
-                >
-                  {copied ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-              <button
-                onClick={generateInvite}
-                disabled={loading}
-                className="text-sm text-[#5BC5A7] hover:underline"
+        {!inviteUrl ? (
+          <Button onClick={generateInvite} loading={loading} className="w-full">
+            Generate Invite Link
+          </Button>
+        ) : (
+          <div className="space-y-3">
+            <Input label="Invite link" readOnly value={inviteUrl} className="bg-gray-50" />
+
+            <div className="flex gap-2">
+              <Button
+                variant={copied ? 'secondary' : 'primary'}
+                className="flex-1"
+                onClick={copyToClipboard}
               >
-                Generate another link
-              </button>
+                {copied ? 'Copied!' : 'Copy'}
+              </Button>
+              <Button variant="secondary" className="flex-1" onClick={generateInvite} loading={loading}>
+                New link
+              </Button>
             </div>
-          )}
+          </div>
+        )}
 
-          {error && (
-            <p className="mt-3 text-sm text-red-500">{error}</p>
-          )}
-        </div>
+        {error && <ErrorState inline message={error} />}
       </div>
     </div>
   );
