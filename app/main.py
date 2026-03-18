@@ -167,4 +167,4 @@ app.openapi = custom_openapi  # type: ignore
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "1.0.0"}

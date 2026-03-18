@@ -1,7 +1,6 @@
 import uuid
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -9,9 +8,8 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models.models import Expense, Membership, Split, User
+from app.models.models import Expense, Membership, Settlement, Split, User
 from app.schemas.schemas import ExpenseCreate, ExpenseOut, ExpenseUpdate, PaginatedResponse
-from app.schemas.schemas import ExpenseCreate, ExpenseOut, PaginatedResponse
 
 router = APIRouter(prefix="/groups/{group_id}/expenses", tags=["expenses"])
 
@@ -93,14 +91,13 @@ async def list_expenses(
     await _assert_member(db, group_id, current_user.id)
     response.headers["X-API-Change"] = "list-endpoints-now-paginated"
 
-    from sqlalchemy import func as sqlfunc
     base_query = (
         select(Expense)
-        .where(Expense.group_id == group_id)
+        .where(Expense.group_id == group_id, Expense.is_deleted == False)
         .order_by(Expense.created_at.desc())
     )
     count_result = await db.execute(
-        select(sqlfunc.count()).select_from(base_query.subquery())
+        select(func.count()).select_from(base_query.subquery())
     )
     total = count_result.scalar_one()
 
@@ -123,7 +120,7 @@ async def _get_expense_or_404(db: AsyncSession, group_id: uuid.UUID, expense_id:
     result = await db.execute(
         select(Expense)
         .options(selectinload(Expense.splits))
-        .where(Expense.id == expense_id, Expense.group_id == group_id)
+        .where(Expense.id == expense_id, Expense.group_id == group_id, Expense.is_deleted == False)
     )
     expense = result.scalar_one_or_none()
     if not expense:
@@ -132,16 +129,12 @@ async def _get_expense_or_404(db: AsyncSession, group_id: uuid.UUID, expense_id:
 
 
 async def _assert_can_modify(db: AsyncSession, group_id: uuid.UUID, expense: Expense, user_id: uuid.UUID):
-    """Allow only expense creator or group admin."""
-    if expense.payer_id == user_id:
-        return
+    """Allow group members to modify expenses (per spec: auth + group membership)."""
     result = await db.execute(
         select(Membership).where(Membership.group_id == group_id, Membership.user_id == user_id)
     )
-    membership = result.scalar_one_or_none()
-    if membership and membership.role == "admin":
-        return
-    raise HTTPException(status_code=403, detail="Not authorized to modify this expense")
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="Not authorized to modify this expense")
 
 
 @router.get("/{expense_id}", response_model=ExpenseOut)
@@ -204,29 +197,25 @@ async def delete_expense(
     expense = await _get_expense_or_404(db, group_id, expense_id)
     await _assert_can_modify(db, group_id, expense, current_user.id)
 
-    await db.delete(expense)
+    # Check if this is the only expense in the group that has a settlement against it.
+    # A settlement "against" an expense means it's the sole expense in the group with any settlement.
+    settlement_count = await db.execute(
+        select(func.count()).select_from(Settlement).where(Settlement.group_id == group_id)
+    )
+    if settlement_count.scalar_one() > 0:
+        # Count non-deleted expenses in the group (excluding this one)
+        other_expenses_count = await db.execute(
+            select(func.count()).select_from(Expense).where(
+                Expense.group_id == group_id,
+                Expense.is_deleted == False,
+                Expense.id != expense_id,
+            )
+        )
+        if other_expenses_count.scalar_one() == 0:
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot delete — this expense has been settled.",
+            )
+
+    expense.is_deleted = True
     await db.commit()
-
-    base_query = (
-        select(Expense)
-        .where(Expense.group_id == group_id)
-        .order_by(Expense.created_at.desc())
-    )
-    count_result = await db.execute(
-        select(func.count()).select_from(base_query.subquery())
-    )
-    total = count_result.scalar_one()
-
-    offset = (page - 1) * page_size
-    result = await db.execute(
-        base_query.options(selectinload(Expense.splits)).offset(offset).limit(page_size)
-    )
-    items = result.scalars().all()
-
-    return PaginatedResponse(
-        items=items,
-        total=total,
-        page=page,
-        page_size=page_size,
-        has_next=(offset + len(items)) < total,
-    )

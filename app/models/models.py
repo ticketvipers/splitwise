@@ -67,6 +67,7 @@ class Expense(Base):
     currency: Mapped[str] = mapped_column(String(3), default="USD")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=func.now())
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     group: Mapped["Group"] = relationship("Group", back_populates="expenses")
     payer: Mapped["User"] = relationship("User", back_populates="expenses_paid")

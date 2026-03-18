@@ -15,6 +15,9 @@ def compute_balances(
     net = {mid: Decimal("0") for mid in member_ids}
 
     for expense in expenses:
+        # Skip soft-deleted expenses
+        if getattr(expense, 'is_deleted', False):
+            continue
         net.setdefault(str(expense.payer_id), Decimal("0"))
         net[str(expense.payer_id)] += expense.amount
         for split in expense.splits:

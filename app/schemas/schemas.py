@@ -120,6 +120,7 @@ class ExpenseOut(BaseModel):
     currency: str
     created_at: datetime
     updated_at: Optional[datetime] = None
+    is_deleted: bool = False
     splits: list[SplitOut]
 
     model_config = {"from_attributes": True}
@@ -163,6 +164,13 @@ class GroupBalances(BaseModel):
 
 
 # ── Invites ───────────────────────────────────────────────────────────────────
+
+class InvitePreview(BaseModel):
+    group_id: uuid.UUID
+    group_name: str
+    member_count: int
+    expires_at: Optional[datetime]
+
 
 class InviteOut(BaseModel):
     token: str
