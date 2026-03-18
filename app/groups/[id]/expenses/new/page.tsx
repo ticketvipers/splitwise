@@ -17,6 +17,7 @@ export default function NewExpensePage() {
   const [paidBy, setPaidBy] = useState(group?.members[0]?.id ?? '');
   const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal');
   const [customSplits, setCustomSplits] = useState<Record<string, string>>({});
+  const [splitError, setSplitError] = useState<string | null>(null);
 
   if (!group) return <div className="text-center py-20 text-gray-400">Group not found.</div>;
 
@@ -27,9 +28,19 @@ export default function NewExpensePage() {
 
     let splits: Split[];
     if (splitMode === 'equal') {
-      const share = Math.round((total / group.members.length) * 100) / 100;
-      splits = group.members.map(m => ({ memberId: m.id, amount: share }));
+      const baseShare = Math.floor((total / group.members.length) * 100) / 100;
+      const remainder = Math.round((total - baseShare * group.members.length) * 100);
+      splits = group.members.map((m, i) => ({
+        memberId: m.id,
+        amount: Math.round((baseShare + (i < remainder ? 0.01 : 0)) * 100) / 100,
+      }));
     } else {
+      const splitTotal = group.members.reduce((sum, m) => sum + (parseFloat(customSplits[m.id] || '0') || 0), 0);
+      if (Math.abs(splitTotal - total) > 0.01) {
+        setSplitError(`Splits must add up to $${total.toFixed(2)}. Current total: $${splitTotal.toFixed(2)}`);
+        return;
+      }
+      setSplitError(null);
       splits = group.members.map(m => ({
         memberId: m.id,
         amount: parseFloat(customSplits[m.id] || '0') || 0,
@@ -76,7 +87,7 @@ export default function NewExpensePage() {
             step="0.01"
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#5BC5A7]"
             value={amount}
-            onChange={e => setAmount(e.target.value)}
+            onChange={e => { setAmount(e.target.value); setSplitError(null); }}
             placeholder="0.00"
             required
           />
@@ -102,7 +113,7 @@ export default function NewExpensePage() {
               <button
                 key={mode}
                 type="button"
-                onClick={() => setSplitMode(mode)}
+                onClick={() => { setSplitMode(mode); setSplitError(null); }}
                 className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   splitMode === mode ? 'text-white' : 'bg-gray-100 text-gray-600'
                 }`}
@@ -137,6 +148,10 @@ export default function NewExpensePage() {
             </div>
           )}
         </div>
+
+        {splitError && (
+          <p className="text-red-500 text-sm font-medium">{splitError}</p>
+        )}
 
         <button
           type="submit"

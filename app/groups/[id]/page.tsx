@@ -40,7 +40,7 @@ export default function GroupPage() {
         ) : (
           <div className="space-y-2">
             {balances.map((b, i) => (
-              <div key={i} className="flex items-center justify-between text-sm">
+              <div key={`${b.from}-${b.to}`} className="flex items-center justify-between text-sm">
                 <span className="text-gray-700">
                   <span className="font-medium text-orange-500">{getMemberName(group.members, b.from)}</span>
                   {' owes '}

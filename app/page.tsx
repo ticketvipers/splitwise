@@ -50,7 +50,7 @@ export default function DashboardPage() {
                     ) : (
                       <div className="text-sm space-y-0.5">
                         {balances.slice(0, 2).map((b, i) => (
-                          <div key={i} className="text-orange-500">
+                          <div key={`${b.from}-${b.to}`} className="text-orange-500">
                             {getMemberName(group.members, b.from)} owes {getMemberName(group.members, b.to)} ${b.amount.toFixed(2)}
                           </div>
                         ))}
