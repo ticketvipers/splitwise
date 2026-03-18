@@ -1,9 +1,16 @@
 """Unit tests for compute_balances() pure function."""
 from decimal import Decimal
 from types import SimpleNamespace
+import uuid
 import pytest
 
 from app.services.balance_service import compute_balances
+
+# Stable UUIDs for tests
+A = "00000000-0000-0000-0000-000000000001"
+B = "00000000-0000-0000-0000-000000000002"
+C = "00000000-0000-0000-0000-000000000003"
+X = "00000000-0000-0000-0000-000000000099"  # former member
 
 
 def make_expense(payer_id: str, amount: str, splits: list[tuple[str, str]]):
@@ -17,62 +24,78 @@ def make_settlement(payer_id: str, payee_id: str, amount: str):
 
 def test_two_users_one_expense():
     """A pays $10, split equally → B owes A $5."""
-    a, b = "user-a", "user-b"
-    expense = make_expense(a, "10.00", [(a, "5.00"), (b, "5.00")])
-    result = compute_balances([expense], [], [a, b])
+    expense = make_expense(A, "10.00", [(A, "5.00"), (B, "5.00")])
+    result, net = compute_balances([expense], [], [A, B])
     assert len(result) == 1
-    assert result[0]["from_user_id"] == b
-    assert result[0]["to_user_id"] == a
+    assert result[0]["from_user_id"] == uuid.UUID(B)
+    assert result[0]["to_user_id"] == uuid.UUID(A)
     assert result[0]["amount"] == Decimal("5.00")
 
 
 def test_three_users_one_payer():
     """A pays $30, split equally → B owes A $10, C owes A $10."""
-    a, b, c = "user-a", "user-b", "user-c"
-    expense = make_expense(a, "30.00", [(a, "10.00"), (b, "10.00"), (c, "10.00")])
-    result = compute_balances([expense], [], [a, b, c])
+    expense = make_expense(A, "30.00", [(A, "10.00"), (B, "10.00"), (C, "10.00")])
+    result, net = compute_balances([expense], [], [A, B, C])
     assert len(result) == 2
-    debts = {r["from_user_id"]: r["amount"] for r in result}
-    assert debts[b] == Decimal("10.00")
-    assert debts[c] == Decimal("10.00")
+    debts = {str(r["from_user_id"]): r["amount"] for r in result}
+    assert debts[B] == Decimal("10.00")
+    assert debts[C] == Decimal("10.00")
     for r in result:
-        assert r["to_user_id"] == a
+        assert r["to_user_id"] == uuid.UUID(A)
 
 
 def test_multiple_payers_simplified():
-    """A pays $20, B pays $10, split 3 ways ($10 each) → simplified debt."""
-    a, b, c = "user-a", "user-b", "user-c"
-    # A pays $20, each owes $10: A net +$10, B net $0, C net -$10
-    # B pays $10, each owes $10: B net +$0 (was 0, now pays +$10, owes $10), C gets more debt
-    # expense1: A pays $20, splits: A=$10, B=$5, C=$5 → net: A+10, B-5, C-5 from this expense... let's be explicit
-    # Simplest: A pays $20 split equally among A,B,C → each $6.67 (messy). Do clean:
-    # A pays $21, splits (A=$7, B=$7, C=$7): A net +14, B net -7, C net -7
-    # B pays $12, splits (A=$4, B=$4, C=$4): A net +10, B net +4, C net -11
-    # After both: A net=14-4=+10? Let me just use compute and check simplification
-    expense1 = make_expense(a, "20.00", [(a, "10.00"), (b, "5.00"), (c, "5.00")])
-    expense2 = make_expense(b, "10.00", [(a, "5.00"), (b, "5.00"), (c, "0.00")])
+    """A pays $20, B pays $10, split 3 ways → simplified debt."""
+    expense1 = make_expense(A, "20.00", [(A, "10.00"), (B, "5.00"), (C, "5.00")])
+    expense2 = make_expense(B, "10.00", [(A, "5.00"), (B, "5.00"), (C, "0.00")])
     # net: A = +20 - 10 - 5 = +5, B = +10 - 5 - 5 = 0, C = 0 - 5 - 0 = -5
-    result = compute_balances([expense1, expense2], [], [a, b, c])
+    result, net = compute_balances([expense1, expense2], [], [A, B, C])
     assert len(result) == 1
-    assert result[0]["from_user_id"] == c
-    assert result[0]["to_user_id"] == a
+    assert result[0]["from_user_id"] == uuid.UUID(C)
+    assert result[0]["to_user_id"] == uuid.UUID(A)
     assert result[0]["amount"] == Decimal("5.00")
 
 
 def test_settlement_zeros_balance():
     """After settlement, balances update to zero."""
-    a, b = "user-a", "user-b"
-    expense = make_expense(a, "10.00", [(a, "5.00"), (b, "5.00")])
-    settlement = make_settlement(b, a, "5.00")
-    result = compute_balances([expense], [settlement], [a, b])
+    expense = make_expense(A, "10.00", [(A, "5.00"), (B, "5.00")])
+    settlement = make_settlement(B, A, "5.00")
+    result, net = compute_balances([expense], [settlement], [A, B])
     assert result == []
 
 
 def test_all_equal_no_balances():
     """When everyone pays equally, no balances returned."""
-    a, b = "user-a", "user-b"
-    # Each pays $10 for the other: A pays B's $10, B pays A's $10
-    e1 = make_expense(a, "10.00", [(a, "5.00"), (b, "5.00")])
-    e2 = make_expense(b, "10.00", [(a, "5.00"), (b, "5.00")])
-    result = compute_balances([e1, e2], [], [a, b])
+    e1 = make_expense(A, "10.00", [(A, "5.00"), (B, "5.00")])
+    e2 = make_expense(B, "10.00", [(A, "5.00"), (B, "5.00")])
+    result, net = compute_balances([e1, e2], [], [A, B])
     assert result == []
+
+
+def test_single_user_group_empty_balances():
+    """Single-user group with no splits → empty balances."""
+    result, net = compute_balances([], [], [A])
+    assert result == []
+    assert net[A] == Decimal("0")
+
+
+def test_former_member_split_does_not_crash():
+    """User X is in splits but not in member_ids → should not raise KeyError."""
+    expense = make_expense(A, "10.00", [(A, "5.00"), (X, "5.00")])
+    result, net = compute_balances([expense], [], [A, B])
+    # Should not crash; X appears in net with negative balance
+    assert X in net
+    assert net[X] == Decimal("-5.00")
+
+
+def test_rounding_three_way_split():
+    """$10 ÷ 3 split 3 ways — total owed should sum to roughly $10."""
+    # $3.33 + $3.33 + $3.34 = $10.00
+    expense = make_expense(A, "10.00", [(A, "3.34"), (B, "3.33"), (C, "3.33")])
+    result, net = compute_balances([expense], [], [A, B, C])
+    total_debt = sum(r["amount"] for r in result)
+    # A net = 10 - 3.34 = 6.66; B net = -3.33; C net = -3.33
+    assert total_debt == Decimal("6.66")
+    # Verify net sums close to zero
+    net_sum = sum(net.values())
+    assert abs(net_sum) < Decimal("0.01")

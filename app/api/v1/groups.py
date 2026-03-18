@@ -108,18 +108,7 @@ async def get_group_balances(
     )
     settlements = settlements_result.scalars().all()
 
-    raw_balances = compute_balances(expenses, settlements, member_ids)
-
-    # Compute net amounts
-    from decimal import Decimal
-    net: dict[str, Decimal] = {mid: Decimal("0") for mid in member_ids}
-    for expense in expenses:
-        net[str(expense.payer_id)] += expense.amount
-        for split in expense.splits:
-            net[str(split.user_id)] -= split.amount
-    for settlement in settlements:
-        net[str(settlement.payer_id)] += settlement.amount
-        net[str(settlement.payee_id)] -= settlement.amount
+    raw_balances, net = compute_balances(expenses, settlements, member_ids)
 
     balance_entries = [
         BalanceEntry(
