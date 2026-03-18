@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.models import Expense, Membership, Split, User
-from app.schemas.schemas import ExpenseCreate, ExpenseOut
+from app.schemas.schemas import ExpenseCreate, ExpenseOut, ExpenseUpdate
 
 router = APIRouter(prefix="/groups/{group_id}/expenses", tags=["expenses"])
 
@@ -96,3 +96,67 @@ async def list_expenses(
         .limit(limit)
     )
     return result.scalars().all()
+
+
+async def _get_expense_or_404(db: AsyncSession, group_id: uuid.UUID, expense_id: uuid.UUID) -> Expense:
+    result = await db.execute(
+        select(Expense)
+        .options(selectinload(Expense.splits))
+        .where(Expense.id == expense_id, Expense.group_id == group_id)
+    )
+    expense = result.scalar_one_or_none()
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    return expense
+
+
+async def _assert_can_modify(db: AsyncSession, group_id: uuid.UUID, expense: Expense, user_id: uuid.UUID):
+    """Allow only expense creator or group admin."""
+    if expense.payer_id == user_id:
+        return
+    result = await db.execute(
+        select(Membership).where(Membership.group_id == group_id, Membership.user_id == user_id)
+    )
+    membership = result.scalar_one_or_none()
+    if membership and membership.role == "admin":
+        return
+    raise HTTPException(status_code=403, detail="Not authorized to modify this expense")
+
+
+@router.patch("/{expense_id}", response_model=ExpenseOut)
+async def update_expense(
+    group_id: uuid.UUID,
+    expense_id: uuid.UUID,
+    body: ExpenseUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _assert_member(db, group_id, current_user.id)
+    expense = await _get_expense_or_404(db, group_id, expense_id)
+    await _assert_can_modify(db, group_id, expense, current_user.id)
+
+    if body.description is not None:
+        expense.description = body.description
+    if body.amount is not None:
+        expense.amount = body.amount
+    if body.currency is not None:
+        expense.currency = body.currency
+
+    await db.commit()
+    await db.refresh(expense)
+    return expense
+
+
+@router.delete("/{expense_id}", status_code=204)
+async def delete_expense(
+    group_id: uuid.UUID,
+    expense_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _assert_member(db, group_id, current_user.id)
+    expense = await _get_expense_or_404(db, group_id, expense_id)
+    await _assert_can_modify(db, group_id, expense, current_user.id)
+
+    await db.delete(expense)
+    await db.commit()

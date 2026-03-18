@@ -72,6 +72,12 @@ class ExpenseCreate(BaseModel):
     splits: list[SplitIn]
 
 
+class ExpenseUpdate(BaseModel):
+    description: Optional[str] = None
+    amount: Optional[Decimal] = None
+    currency: Optional[str] = None
+
+
 class SplitOut(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
@@ -129,3 +135,20 @@ class GroupBalances(BaseModel):
     group_id: uuid.UUID
     balances: list[BalanceEntry]
     net: dict[str, Decimal]  # user_id -> net amount (positive = owed, negative = owes)
+
+
+# ── Invites ───────────────────────────────────────────────────────────────────
+
+class InviteOut(BaseModel):
+    token: str
+    group_id: uuid.UUID
+    join_url: str
+    expires_at: Optional[datetime]
+    is_revoked: bool
+
+    model_config = {"from_attributes": True}
+
+
+class JoinResponse(BaseModel):
+    group: GroupOut
+    message: str = "Successfully joined group"
