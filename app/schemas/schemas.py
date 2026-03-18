@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -11,7 +13,7 @@ from pydantic import BaseModel, EmailStr
 class SignupRequest(BaseModel):
     email: EmailStr
     password: str
-    display_name: str
+    name: str
 
 
 class LoginRequest(BaseModel):
@@ -36,7 +38,7 @@ class UserOut(BaseModel):
 # ── Groups ────────────────────────────────────────────────────────────────────
 
 class GroupCreate(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
 
 
