@@ -23,11 +23,33 @@ A FastAPI + PostgreSQL backend for splitting expenses between friends and groups
 
 ---
 
-## Local Development
+## Quick Start with Docker Compose
+
+The fastest way to get the full stack running locally:
+
+```bash
+cp .env.example .env
+cp .env.local.example .env.local
+echo "SECRET_KEY=$(openssl rand -hex 32)" >> .env
+docker compose up --build
+```
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8000 |
+| API Docs (Swagger) | http://localhost:8000/docs |
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for full deployment guide, staging options, release checklist, and rollback plan.
+
+---
+
+## Local Development (without Docker)
 
 ### Prerequisites
 
 - Python 3.11+
+- Node.js 20+
 - PostgreSQL 14+ running locally (or via Docker)
 
 ### 1. Clone & create virtual environment
@@ -182,3 +204,30 @@ splitwise-backend/
 ├── requirements.txt
 └── .env.example
 ```
+
+---
+
+## Testing & Quality
+
+### Run tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+### Linting
+
+```bash
+pip install ruff
+ruff check app/ tests/
+```
+
+### CI
+
+The CI workflow (`.github/workflows/ci.yml`) runs automatically on every pull request and push to `main`. It:
+
+1. Lints Python code with **ruff**
+2. Runs **pytest** unit tests (split math, balance calculation, security)
+3. Type-checks TypeScript with **tsc**
+
+All checks must pass before merging.

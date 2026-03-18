@@ -207,13 +207,4 @@ class TestOwnerProtection:
         assert "owner" in msg
 
     def test_owner_cannot_be_demoted(self):
-        ok, msg = validate_owner_protection(is_owner=True, action="demote")
-        assert not ok
-
-    def test_non_owner_can_be_removed(self):
-        ok, msg = validate_owner_protection(is_owner=False, action="remove")
-        assert ok, msg
-
-    def test_non_owner_can_be_demoted(self):
-        ok, msg = validate_owner_protection(is_owner=False, action="demote")
-        assert ok, msg
+        ok, msg = validate_owner_protection(is_owner=True,

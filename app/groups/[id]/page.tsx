@@ -14,7 +14,8 @@ export default function GroupPage() {
   if (!group) return <div className="text-center py-20 text-gray-400">Group not found.</div>;
 
   const groupExpenses = expenses.filter(e => e.groupId === id);
-  const balances = computeBalances(groupExpenses, group.members);
+  const groupSettlements = settlements.filter(s => s.groupId === id);
+  const balances = computeBalances(groupExpenses, group.members, groupSettlements);
 
   const removeMember = (memberId: string) => {
     setGroups(prev => prev.map(g =>

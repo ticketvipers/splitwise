@@ -4,11 +4,12 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { getMemberName } from '../../../../lib/balances';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { Settlement } from '../../../../lib/types';
 
 function SettleContent() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
-  const { groups, expenses, setExpenses } = useApp();
+  const { groups, settlements, setSettlements } = useApp();
   const router = useRouter();
 
   const group = groups.find(g => g.id === id);
@@ -19,14 +20,15 @@ function SettleContent() {
   if (!group) return <div className="text-center py-20 text-gray-400">Group not found.</div>;
 
   const handleSettle = () => {
-    // Mark all unsettled expenses where fromId owes toId as settled
-    setExpenses(prev => prev.map(e => {
-      if (e.groupId !== id || e.settled) return e;
-      const payerIsTo = e.paidBy === toId;
-      const debtorIsFrom = e.splits.some(s => s.memberId === fromId && s.amount > 0);
-      if (payerIsTo && debtorIsFrom) return { ...e, settled: true };
-      return e;
-    }));
+    const settlement: Settlement = {
+      id: crypto.randomUUID(),
+      groupId: id,
+      payerId: fromId,
+      payeeId: toId,
+      amount,
+      createdAt: new Date().toISOString(),
+    };
+    setSettlements(prev => [...prev, settlement]);
     router.push(`/groups/${id}`);
   };
 
@@ -45,7 +47,7 @@ function SettleContent() {
           <span className="font-semibold text-green-600">{getMemberName(group.members, toId)}</span>
         </p>
         <p className="text-4xl font-bold text-gray-800">${amount.toFixed(2)}</p>
-        <p className="text-sm text-gray-400">This will mark the related expenses as settled.</p>
+        <p className="text-sm text-gray-400">Recording this payment will update the group balances.</p>
 
         <div className="flex gap-3 pt-2">
           <Link
@@ -63,6 +65,31 @@ function SettleContent() {
           </button>
         </div>
       </div>
+
+      {/* Settlement history for this pair */}
+      {settlements.filter(s => s.groupId === id && ((s.payerId === fromId && s.payeeId === toId) || (s.payerId === toId && s.payeeId === fromId))).length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm p-5">
+          <h2 className="font-semibold text-gray-700 mb-3">Past Settlements</h2>
+          <div className="space-y-2">
+            {settlements
+              .filter(s => s.groupId === id && ((s.payerId === fromId && s.payeeId === toId) || (s.payerId === toId && s.payeeId === fromId)))
+              .slice().reverse()
+              .map(s => (
+                <div key={s.id} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">
+                    <span className="font-medium">{getMemberName(group.members, s.payerId)}</span>
+                    {' paid '}
+                    <span className="font-medium">{getMemberName(group.members, s.payeeId)}</span>
+                  </span>
+                  <div className="text-right">
+                    <span className="font-semibold text-gray-800">${s.amount.toFixed(2)}</span>
+                    <p className="text-xs text-gray-400">{new Date(s.createdAt).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

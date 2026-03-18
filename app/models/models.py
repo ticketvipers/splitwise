@@ -65,12 +65,17 @@ class Expense(Base):
     description: Mapped[str] = mapped_column(String(255), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD")
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # split_type: "equal" | "exact"
+    split_type: Mapped[str] = mapped_column(String(20), default="exact", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=func.now())
 
     group: Mapped["Group"] = relationship("Group", back_populates="expenses")
     payer: Mapped["User"] = relationship("User", back_populates="expenses_paid")
     splits: Mapped[list["Split"]] = relationship("Split", back_populates="expense", cascade="all, delete-orphan")
+    audit_logs: Mapped[list["ExpenseAuditLog"]] = relationship("ExpenseAuditLog", back_populates="expense", cascade="all, delete-orphan")
 
 
 class Split(Base):
@@ -83,6 +88,21 @@ class Split(Base):
     is_settled: Mapped[bool] = mapped_column(Boolean, default=False)
 
     expense: Mapped["Expense"] = relationship("Expense", back_populates="splits")
+
+
+class ExpenseAuditLog(Base):
+    """Audit trail for expense edits and deletes."""
+    __tablename__ = "expense_audit_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True, native_uuid=False), primary_key=True, default=uuid.uuid4)
+    expense_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True, native_uuid=False), ForeignKey("expenses.id"), nullable=False)
+    actor_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True, native_uuid=False), ForeignKey("users.id"), nullable=False)
+    action: Mapped[str] = mapped_column(String(20), nullable=False)  # "edit" | "delete"
+    audit_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    snapshot: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON snapshot before change
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    expense: Mapped["Expense"] = relationship("Expense", back_populates="audit_logs")
 
 
 class Settlement(Base):

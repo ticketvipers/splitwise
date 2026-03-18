@@ -1,29 +1,35 @@
-import { Expense, Balance, Member } from './types';
+import { Expense, Balance, Member, Settlement } from './types';
 
-export function computeBalances(expenses: Expense[], members: Member[]): Balance[] {
+export function computeBalances(expenses: Expense[], members: Member[], settlements: Settlement[] = []): Balance[] {
   // net[memberId] = positive means owed money, negative means owes money
   const net: Record<string, number> = {};
   members.forEach(m => (net[m.id] = 0));
 
-  expenses
-    .filter(e => !e.settled)
-    .forEach(expense => {
-      // payer gets credited full amount
-      net[expense.paidBy] = (net[expense.paidBy] || 0) + expense.amount;
-      // each split member is debited their share
-      expense.splits.forEach(split => {
-        net[split.memberId] = (net[split.memberId] || 0) - split.amount;
-      });
+  expenses.forEach(expense => {
+    // payer gets credited full amount
+    net[expense.paidBy] = (net[expense.paidBy] || 0) + expense.amount;
+    // each split member is debited their share
+    expense.splits.forEach(split => {
+      net[split.memberId] = (net[split.memberId] || 0) - split.amount;
     });
+  });
 
-  // Settle using greedy algorithm
+  // Apply settlements: payer's balance increases (they paid), payee's decreases
+  settlements.forEach(s => {
+    net[s.payerId] = (net[s.payerId] || 0) + s.amount;
+    net[s.payeeId] = (net[s.payeeId] || 0) - s.amount;
+  });
+
+  // Settle using greedy algorithm (minimize transactions)
   const balances: Balance[] = [];
   const creditors = members
     .filter(m => (net[m.id] || 0) > 0.005)
-    .map(m => ({ id: m.id, amount: net[m.id] }));
+    .map(m => ({ id: m.id, amount: net[m.id] }))
+    .sort((a, b) => b.amount - a.amount);
   const debtors = members
     .filter(m => (net[m.id] || 0) < -0.005)
-    .map(m => ({ id: m.id, amount: -net[m.id] }));
+    .map(m => ({ id: m.id, amount: -net[m.id] }))
+    .sort((a, b) => b.amount - a.amount);
 
   let ci = 0, di = 0;
   while (ci < creditors.length && di < debtors.length) {

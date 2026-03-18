@@ -22,6 +22,9 @@ export interface Expense {
   amount: number;
   paidBy: string; // member id
   splits: Split[];
+  notes?: string;
+  date?: string; // ISO date string
+  splitType: 'equal' | 'exact';
   createdAt: string;
   settled: boolean;
 }
@@ -30,4 +33,14 @@ export interface Balance {
   from: string; // member id
   to: string;   // member id
   amount: number;
+}
+
+export interface Settlement {
+  id: string;
+  groupId: string;
+  payerId: string;  // who paid
+  payeeId: string;  // who received
+  amount: number;
+  note?: string;
+  createdAt: string;
 }
