@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.limiter import limiter
 from app.api.v1 import auth, groups, expenses, settlements
 from app.api.v1 import invites
+from app.api.v1 import users
 
 tags_metadata = [
     {
@@ -31,6 +32,10 @@ tags_metadata = [
     {
         "name": "balances",
         "description": "Compute net balances and simplified debt for a group.",
+    },
+    {
+        "name": "users",
+        "description": "View and update the authenticated user's profile.",
     },
 ]
 
@@ -133,6 +138,7 @@ app.include_router(groups.router, prefix="/api/v1")
 app.include_router(expenses.router, prefix="/api/v1")
 app.include_router(settlements.router, prefix="/api/v1")
 app.include_router(invites.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
 
 
 def custom_openapi():

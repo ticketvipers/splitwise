@@ -8,12 +8,12 @@ from sqlalchemy import select
 import httpx
 import urllib.parse
 
-from app.core.security import verify_password, get_password_hash, create_access_token
+from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_refresh_token
 from app.db.session import get_db
 from app.core.limiter import limiter
 from app.core.config import settings
 from app.models.models import User
-from app.schemas.schemas import SignupRequest, LoginRequest, TokenResponse, UserOut
+from app.schemas.schemas import SignupRequest, LoginRequest, TokenResponse, UserOut, RefreshRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -29,6 +29,9 @@ _OAUTH_STATE_TTL = 600  # seconds
 # exchange_code → (jwt, timestamp) (expires after 60 seconds)
 _exchange_codes: dict[str, tuple[str, float]] = {}
 _EXCHANGE_CODE_TTL = 60  # seconds
+
+# revoked refresh tokens (in-memory; production should use Redis/DB)
+_revoked_refresh_tokens: set[str] = set()
 
 
 def _purge_expired_states():
@@ -59,8 +62,9 @@ async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depen
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    token = create_access_token({"sub": str(user.id)})
-    return TokenResponse(access_token=token)
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -70,8 +74,41 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
     user = result.scalar_one_or_none()
     if not user or not user.hashed_password or not verify_password(body.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_access_token({"sub": str(user.id)})
-    return TokenResponse(access_token=token)
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    """Exchange a valid refresh token for a new access token (+ rotated refresh token)."""
+    token = body.refresh_token
+    if token in _revoked_refresh_tokens:
+        raise HTTPException(status_code=401, detail="Refresh token has been revoked")
+    payload = decode_refresh_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+    user_id_str = payload.get("sub")
+    try:
+        import uuid
+        user_id = uuid.UUID(user_id_str)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token subject")
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+    # Rotate: revoke old token, issue new pair
+    _revoked_refresh_tokens.add(token)
+    new_access = create_access_token({"sub": str(user.id)})
+    new_refresh = create_refresh_token({"sub": str(user.id)})
+    return TokenResponse(access_token=new_access, refresh_token=new_refresh)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(body: RefreshRequest):
+    """Revoke the provided refresh token (client should discard the access token too)."""
+    _revoked_refresh_tokens.add(body.refresh_token)
 
 
 @router.get("/google")
@@ -179,3 +216,4 @@ async def exchange_code(request: Request):
         raise HTTPException(status_code=400, detail="Exchange code expired")
 
     return TokenResponse(access_token=jwt)
+
