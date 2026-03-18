@@ -18,7 +18,7 @@ A FastAPI + PostgreSQL backend for splitting expenses between friends and groups
 | ORM | SQLAlchemy 2 (async) |
 | Migrations | Alembic |
 | DB driver | asyncpg |
-| Auth | python-jose (JWT) + bcrypt |
+| Auth | PyJWT (JWT) + bcrypt |
 | Validation | Pydantic v2 |
 
 ---
@@ -57,9 +57,12 @@ cp .env.example .env
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/splitwise` | Async PostgreSQL DSN |
-| `SECRET_KEY` | `changeme-...` | JWT signing secret — **change this in production!** |
+| `SECRET_KEY` | **(required — no default)** | JWT signing secret. **Must be set or the app will refuse to start.** Generate with: `openssl rand -hex 32` |
 | `ALGORITHM` | `HS256` | JWT algorithm |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | Token TTL (1 day) |
+| `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated list of allowed CORS origins |
+
+> ⚠️ **`SECRET_KEY` is required.** The application will raise a `RuntimeError` at startup if this variable is not set. Never use a hardcoded or weak secret in production.
 
 ### 4. Create the database
 

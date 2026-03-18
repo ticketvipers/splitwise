@@ -11,6 +11,13 @@ from app.schemas.schemas import SettlementCreate, SettlementOut
 router = APIRouter(prefix="/groups/{group_id}/settlements", tags=["settlements"])
 
 
+async def _get_member_ids(db: AsyncSession, group_id: uuid.UUID) -> set:
+    result = await db.execute(
+        select(Membership.user_id).where(Membership.group_id == group_id)
+    )
+    return {row[0] for row in result.fetchall()}
+
+
 @router.post("", response_model=SettlementOut, status_code=201)
 async def record_settlement(
     group_id: uuid.UUID,
@@ -23,6 +30,17 @@ async def record_settlement(
     )
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=403, detail="Not a member of this group")
+
+    # Reject self-settlement
+    if body.payer_id == body.payee_id:
+        raise HTTPException(status_code=400, detail="payer_id and payee_id must be different")
+
+    # Validate both payer and payee are group members
+    member_ids = await _get_member_ids(db, group_id)
+    if body.payer_id not in member_ids:
+        raise HTTPException(status_code=400, detail=f"payer_id {body.payer_id} is not a member of this group")
+    if body.payee_id not in member_ids:
+        raise HTTPException(status_code=400, detail=f"payee_id {body.payee_id} is not a member of this group")
 
     settlement = Settlement(
         group_id=group_id,
