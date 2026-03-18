@@ -99,3 +99,26 @@ def test_rounding_three_way_split():
     # Verify net sums close to zero
     net_sum = sum(net.values())
     assert abs(net_sum) < Decimal("0.01")
+
+
+def test_partial_settlement_reduces_balance():
+    """Partial settlement reduces but doesn't eliminate the debt."""
+    expense = make_expense(A, "10.00", [(A, "5.00"), (B, "5.00")])
+    settlement = make_settlement(B, A, "3.00")
+    result, net = compute_balances([expense], [settlement], [A, B])
+    assert len(result) == 1
+    assert result[0]["from_user_id"] == uuid.UUID(B)
+    assert result[0]["to_user_id"] == uuid.UUID(A)
+    assert result[0]["amount"] == Decimal("2.00")
+
+
+def test_overpayment_flips_direction():
+    """If B overpays the settlement, B becomes a creditor."""
+    expense = make_expense(A, "10.00", [(A, "5.00"), (B, "5.00")])
+    settlement = make_settlement(B, A, "8.00")
+    result, net = compute_balances([expense], [settlement], [A, B])
+    # B net = -5 + 8 = +3, A net = +5 - 8 = -3
+    assert len(result) == 1
+    assert result[0]["from_user_id"] == uuid.UUID(A)
+    assert result[0]["to_user_id"] == uuid.UUID(B)
+    assert result[0]["amount"] == Decimal("3.00")
