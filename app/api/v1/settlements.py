@@ -29,7 +29,8 @@ async def record_settlement(
         select(Membership).where(Membership.group_id == group_id, Membership.user_id == current_user.id)
     )
     if not result.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail="Not a member of this group")
+        # Return 404 to avoid leaking group existence to non-members
+        raise HTTPException(status_code=404, detail="Group not found")
 
     # Reject self-settlement
     if body.payer_id == body.payee_id:

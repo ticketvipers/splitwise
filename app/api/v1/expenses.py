@@ -18,7 +18,8 @@ async def _assert_member(db: AsyncSession, group_id: uuid.UUID, user_id: uuid.UU
         select(Membership).where(Membership.group_id == group_id, Membership.user_id == user_id)
     )
     if not result.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail="Not a member of this group")
+        # Return 404 to avoid leaking group existence to non-members
+        raise HTTPException(status_code=404, detail="Group not found")
 
 
 async def _get_member_ids(db: AsyncSession, group_id: uuid.UUID) -> set:
