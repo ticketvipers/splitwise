@@ -101,9 +101,6 @@ async def update_group(
         raise HTTPException(
             status_code=403,
             detail="Only group admins can update group details",
-            detail=ErrorResponse(
-                error=ErrorDetail(code="forbidden", message="Only group admins can update group details")
-            ).model_dump(),
         )
     if body.name is not None:
         group.name = body.name

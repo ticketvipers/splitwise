@@ -9,6 +9,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.limiter import limiter
 from app.api.v1 import auth, groups, expenses, settlements
+from app.api.v1 import invites
 
 tags_metadata = [
     {
@@ -131,6 +132,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(groups.router, prefix="/api/v1")
 app.include_router(expenses.router, prefix="/api/v1")
 app.include_router(settlements.router, prefix="/api/v1")
+app.include_router(invites.router, prefix="/api/v1")
 
 
 def custom_openapi():

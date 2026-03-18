@@ -1,5 +1,6 @@
 import secrets
 import time
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -95,7 +96,7 @@ async def google_login():
 
 
 @router.get("/google/callback")
-async def google_callback(code: str, state: str | None = None, db: AsyncSession = Depends(get_db)):
+async def google_callback(code: str, state: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=501, detail="Google OAuth is not configured")
 
