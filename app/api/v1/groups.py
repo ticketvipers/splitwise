@@ -9,8 +9,6 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.models import Expense, Group, Membership, Settlement, User
 from app.schemas.schemas import (
-    ErrorDetail,
-    ErrorResponse,
     GroupCreate,
     GroupUpdate,
     GroupOut,
@@ -166,10 +164,5 @@ async def _get_group_or_404(db: AsyncSession, group_id: uuid.UUID, user_id: uuid
     )
     group = result.scalar_one_or_none()
     if not group:
-        raise HTTPException(
-            status_code=404,
-            detail=ErrorResponse(
-                error=ErrorDetail(code="not_found", message="Group not found")
-            ).model_dump(),
-        )
+        raise HTTPException(status_code=404, detail="Group not found")
     return group

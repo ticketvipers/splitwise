@@ -96,6 +96,9 @@ class ErrorResponse(BaseModel):
 > ⚠️ **Breaking Change Notice (introduced in fix/issue-37):** List endpoints have migrated from a flat array response
 > to a paginated envelope format. Clients that previously expected a plain JSON array will need
 > to update to read `response.items`. All paginated endpoints return an
+> ⚠️ **Breaking Change Notice (introduced in fix/issue-37):** List endpoints have migrated from a flat array
+> response to a paginated envelope format. Clients that previously expected a plain JSON array will need to
+> update to read `response.items`. All paginated endpoints return an
 > `X-API-Change: list-endpoints-now-paginated` response header as a soft migration signal.
 > Plan to update clients before this change reaches production.
 

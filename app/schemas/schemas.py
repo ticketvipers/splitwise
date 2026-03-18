@@ -20,7 +20,6 @@ class ErrorDetail(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: ErrorDetail
-    request_id: Optional[str] = None
 
 
 # ── Pagination ────────────────────────────────────────────────────────────────
