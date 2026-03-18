@@ -204,3 +204,30 @@ splitwise-backend/
 ├── requirements.txt
 └── .env.example
 ```
+
+---
+
+## Testing & Quality
+
+### Run tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+### Linting
+
+```bash
+pip install ruff
+ruff check app/ tests/
+```
+
+### CI
+
+The CI workflow (`.github/workflows/ci.yml`) runs automatically on every pull request and push to `main`. It:
+
+1. Lints Python code with **ruff**
+2. Runs **pytest** unit tests (split math, balance calculation, security)
+3. Type-checks TypeScript with **tsc**
+
+All checks must pass before merging.
