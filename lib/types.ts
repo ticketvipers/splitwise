@@ -22,6 +22,9 @@ export interface Expense {
   amount: number;
   paidBy: string; // member id
   splits: Split[];
+  notes?: string;
+  date?: string; // ISO date string
+  splitType: 'equal' | 'exact';
   createdAt: string;
   settled: boolean;
 }

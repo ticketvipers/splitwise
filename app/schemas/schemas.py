@@ -91,15 +91,23 @@ class SplitIn(BaseModel):
 
 class ExpenseCreate(BaseModel):
     description: str
-    amount: Decimal
+    amount: Decimal = Field(..., gt=0)
     currency: str = "USD"
-    splits: list[SplitIn]
+    notes: Optional[str] = None
+    date: Optional[datetime] = None
+    # split_type: "equal" auto-divides; "exact" uses provided splits list
+    split_type: str = Field(default="equal", pattern="^(equal|exact)$")
+    # For split_type="exact": provide splits list; for "equal" it is auto-computed
+    splits: Optional[list[SplitIn]] = None
 
 
 class ExpenseUpdate(BaseModel):
     description: Optional[str] = None
     amount: Optional[Decimal] = Field(default=None, gt=0)
     currency: Optional[str] = None
+    notes: Optional[str] = None
+    date: Optional[datetime] = None
+    audit_note: Optional[str] = None  # reason for edit
 
 
 class SplitOut(BaseModel):
@@ -111,6 +119,16 @@ class SplitOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AuditLogOut(BaseModel):
+    id: uuid.UUID
+    actor_id: uuid.UUID
+    action: str
+    audit_note: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class ExpenseOut(BaseModel):
     id: uuid.UUID
     group_id: uuid.UUID
@@ -118,9 +136,13 @@ class ExpenseOut(BaseModel):
     description: str
     amount: Decimal
     currency: str
+    notes: Optional[str] = None
+    date: Optional[datetime] = None
+    split_type: str
     created_at: datetime
     updated_at: Optional[datetime] = None
     splits: list[SplitOut]
+    audit_logs: list[AuditLogOut] = []
 
     model_config = {"from_attributes": True}
 
