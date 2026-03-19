@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -7,10 +7,12 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
 
 export function Input({ label, error, hint, id, className = '', ...props }: InputProps) {
-  const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
+  const reactId = useId();
+  const hasLabel = typeof label === 'string' && label.trim().length > 0;
+  const inputId = id || (hasLabel ? label.trim().toLowerCase().replace(/\s+/g, '-') : `input-${reactId}`);
   return (
     <div className="flex flex-col gap-1">
-      {label && (
+      {hasLabel && (
         <label htmlFor={inputId} className="text-sm font-medium text-gray-700">
           {label}
         </label>
