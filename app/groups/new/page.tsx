@@ -44,7 +44,7 @@ export default function NewGroupPage() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Group Name</label>
           <input
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#5BC5A7]"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5BC5A7]"
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="e.g. Trip to Vegas"
@@ -56,7 +56,7 @@ export default function NewGroupPage() {
           <label className="block text-sm font-medium text-gray-700 mb-1">Add Members</label>
           <div className="flex gap-2">
             <input
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#5BC5A7]"
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-gray-900 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5BC5A7]"
               value={memberInput}
               onChange={e => setMemberInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addMember())}
