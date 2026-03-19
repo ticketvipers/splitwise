@@ -109,9 +109,13 @@ async def create_expense(
 
         computed_splits = [(s.user_id, s.amount) for s in body.splits]
 
+    payer_id = body.payer_id or current_user.id
+    if payer_id not in member_ids:
+        raise HTTPException(status_code=422, detail="payer_id must be a member of the group")
+
     expense = Expense(
         group_id=group_id,
-        payer_id=current_user.id,
+        payer_id=payer_id,
         description=body.description,
         amount=body.amount,
         currency=body.currency,

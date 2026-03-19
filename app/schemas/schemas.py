@@ -46,6 +46,8 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
+    # Convenience: include user id so clients/tests can avoid an extra /users/me call.
+    id: Optional[uuid.UUID] = None
     access_token: str
     refresh_token: Optional[str] = None
     token_type: str = "bearer"
@@ -119,6 +121,8 @@ class ExpenseCreate(BaseModel):
     currency: str = "USD"
     notes: Optional[str] = None
     date: Optional[datetime] = None
+    # Optional override: who paid (must be a group member). Defaults to the authenticated user.
+    payer_id: Optional[uuid.UUID] = None
     # split_type: "equal" auto-divides; "exact" uses provided splits list
     split_type: str = Field(default="equal", pattern="^(equal|exact)$")
     # For split_type="exact": provide splits list; for "equal" it is auto-computed

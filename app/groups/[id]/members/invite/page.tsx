@@ -1,15 +1,13 @@
 'use client';
 import { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { useApp } from '../../../../context/AppContext';
+import { useParams } from 'next/navigation';
+import { useApp } from '@/context/AppContext';
+import { apiFetch } from '@/lib/api';
 import Link from 'next/link';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function InviteMemberPage() {
   const { id } = useParams<{ id: string }>();
   const { token } = useApp();
-  const router = useRouter();
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,18 +17,13 @@ export default function InviteMemberPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/groups/${id}/invite`, {
+      if (!token) throw new Error('You must be logged in to generate an invite link');
+
+      const data = await apiFetch<{ join_url: string }>(`/api/v1/groups/${id}/invite`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        token,
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data?.error?.message || 'Failed to generate invite link');
-      }
-      const data = await res.json();
+
       setInviteUrl(data.join_url);
     } catch (e: any) {
       setError(e.message);

@@ -1,14 +1,9 @@
 'use client';
 import { useApp } from '../context/AppContext';
-import { computeBalances, getMemberName } from '../lib/balances';
 import Link from 'next/link';
 
 export default function DashboardPage() {
-  const { groups, expenses } = useApp();
-
-  // Compute overall totals across all groups
-  // We need a "current user" concept — we'll use a simple approach:
-  // show all balances across groups summarized
+  const { groups } = useApp();
 
   return (
     <div>
@@ -27,43 +22,23 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {groups.map(group => {
-            const groupExpenses = expenses.filter(e => e.groupId === group.id);
-            const balances = computeBalances(groupExpenses, group.members);
-
-            return (
-              <Link
-                key={group.id}
-                href={`/groups/${group.id}`}
-                className="block bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="font-semibold text-gray-800 text-lg">{group.name}</h2>
-                    <p className="text-sm text-gray-400">
-                      {group.members.length} members · {groupExpenses.filter(e => !e.settled).length} active expenses
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    {balances.length === 0 ? (
-                      <span className="text-sm text-green-500 font-medium">All settled up ✓</span>
-                    ) : (
-                      <div className="text-sm space-y-0.5">
-                        {balances.slice(0, 2).map((b, i) => (
-                          <div key={`${b.from}-${b.to}`} className="text-orange-500">
-                            {getMemberName(group.members, b.from)} owes {getMemberName(group.members, b.to)} ${b.amount.toFixed(2)}
-                          </div>
-                        ))}
-                        {balances.length > 2 && (
-                          <div className="text-gray-400">+{balances.length - 2} more</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+          {groups.map(group => (
+            <Link
+              key={group.id}
+              href={`/groups/${group.id}`}
+              className="block bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold text-gray-800 text-lg">{group.name}</h2>
+                  <p className="text-sm text-gray-400">
+                    {group.members.length} member{group.members.length !== 1 ? 's' : ''}
+                  </p>
                 </div>
-              </Link>
-            );
-          })}
+                <div className="text-right text-xs text-gray-300">→</div>
+              </div>
+            </Link>
+          ))}
 
           <Link
             href="/groups/new"

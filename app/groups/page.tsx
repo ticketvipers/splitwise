@@ -1,10 +1,9 @@
 'use client';
 import { useApp } from '../../context/AppContext';
-import { computeBalances } from '../../lib/balances';
 import Link from 'next/link';
 
 export default function GroupsPage() {
-  const { groups, expenses } = useApp();
+  const { groups } = useApp();
 
   return (
     <div>
@@ -36,40 +35,23 @@ export default function GroupsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {groups.map(g => {
-            const groupExpenses = expenses.filter(e => e.groupId === g.id);
-            const balances = computeBalances(groupExpenses, g.members);
-            const lastExpense = groupExpenses.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-            const lastActivity = lastExpense
-              ? new Date(lastExpense.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-              : null;
-
-            return (
-              <Link
-                key={g.id}
-                href={`/groups/${g.id}`}
-                className="flex items-center justify-between bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition-shadow"
-              >
-                <div className="space-y-1">
-                  <div className="font-semibold text-gray-800 text-base">{g.name}</div>
-                  <div className="text-sm text-gray-400">
-                    {g.members.length} member{g.members.length !== 1 ? 's' : ''} · {groupExpenses.filter(e => !e.settled).length} active expense{groupExpenses.filter(e => !e.settled).length !== 1 ? 's' : ''}
-                  </div>
-                  {lastActivity && (
-                    <div className="text-xs text-gray-300">Last activity: {lastActivity}</div>
-                  )}
+          {groups.map(g => (
+            <Link
+              key={g.id}
+              href={`/groups/${g.id}`}
+              className="flex items-center justify-between bg-white rounded-xl shadow-sm p-5 hover:shadow-md transition-shadow"
+            >
+              <div className="space-y-1">
+                <div className="font-semibold text-gray-800 text-base">{g.name}</div>
+                <div className="text-sm text-gray-400">
+                  {g.members.length} member{g.members.length !== 1 ? 's' : ''}
                 </div>
-                <div className="text-right space-y-1">
-                  {balances.length === 0 ? (
-                    <span className="text-sm text-green-500 font-medium">All settled ✓</span>
-                  ) : (
-                    <span className="text-sm text-orange-500 font-medium">{balances.length} outstanding</span>
-                  )}
-                  <div className="text-xs text-gray-300">→</div>
-                </div>
-              </Link>
-            );
-          })}
+              </div>
+              <div className="text-right space-y-1">
+                <div className="text-xs text-gray-300">→</div>
+              </div>
+            </Link>
+          ))}
         </div>
       )}
     </div>
