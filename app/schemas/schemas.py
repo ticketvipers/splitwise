@@ -46,6 +46,8 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
+    # Convenience: include user id so clients/tests can avoid an extra /users/me call.
+    id: Optional[uuid.UUID] = None
     access_token: str
     refresh_token: Optional[str] = None
     token_type: str = "bearer"
