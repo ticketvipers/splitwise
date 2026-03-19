@@ -100,7 +100,7 @@ export default function GroupPage() {
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-gray-800">{m.name}</span>
                   {idx === 0 && (
-                    <span className="px-2 py-0.5 rounded-full text-xs bg-[#e6f7f3] text-[#3a9a82] font-medium">Member</span>
+                    <span className="px-2 py-0.5 rounded-full text-xs bg-[#e6f7f3] text-[#3a9a82] font-medium">Owner</span>
                   )}
                 </div>
                 {idx > 0 && (
