@@ -1,14 +1,12 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useApp } from '../../context/AppContext';
 import { computeBalances } from '../../lib/balances';
-import { Button } from '../../components/ui/Button';
+import { LinkButton } from '../../components/ui/LinkButton';
 import { EmptyState } from '../../components/ui/EmptyState';
 
 export default function GroupsPage() {
-  const router = useRouter();
   const { groups, expenses } = useApp();
 
   return (
@@ -20,9 +18,9 @@ export default function GroupsPage() {
             {groups.length} group{groups.length !== 1 ? 's' : ''} total
           </p>
         </div>
-        <Button size="md" onClick={() => router.push('/groups/new')}>
+        <LinkButton size="md" href="/groups/new">
           + Create Group
-        </Button>
+        </LinkButton>
       </div>
 
       {groups.length === 0 ? (
@@ -32,7 +30,7 @@ export default function GroupsPage() {
             heading="No groups yet"
             subtext="Create a group to start splitting expenses with friends."
             ctaLabel="Create your first group"
-            onCta={() => router.push('/groups/new')}
+            ctaHref="/groups/new"
           />
         </div>
       ) : (

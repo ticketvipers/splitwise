@@ -1,17 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { useApp } from '../../../context/AppContext';
 import { computeBalances, getMemberName } from '../../../lib/balances';
 import { Button } from '../../../components/ui/Button';
+import { LinkButton } from '../../../components/ui/LinkButton';
 import { EmptyState } from '../../../components/ui/EmptyState';
 import { ErrorState } from '../../../components/ui/ErrorState';
 
 export default function GroupPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
   const { groups, expenses, settlements, setGroups } = useApp();
   const [showMembers, setShowMembers] = useState(false);
 
@@ -43,9 +43,9 @@ export default function GroupPage() {
             {group.members.length} member{group.members.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <Button size="md" onClick={() => router.push(`/groups/${id}/expenses/new`)}>
+        <LinkButton size="md" href={`/groups/${id}/expenses/new`}>
           + Add Expense
-        </Button>
+        </LinkButton>
       </div>
 
       {/* Members */}
@@ -105,14 +105,12 @@ export default function GroupPage() {
                 </span>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <span className="font-semibold text-gray-800">${b.amount.toFixed(2)}</span>
-                  <Button
+                  <LinkButton
                     size="sm"
-                    onClick={() =>
-                      router.push(`/groups/${id}/settle?from=${b.from}&to=${b.to}&amount=${b.amount}`)
-                    }
+                    href={`/groups/${id}/settle?from=${b.from}&to=${b.to}&amount=${b.amount}`}
                   >
                     Settle Up
-                  </Button>
+                  </LinkButton>
                 </div>
               </div>
             ))}
@@ -129,7 +127,7 @@ export default function GroupPage() {
             heading="No expenses yet"
             subtext="Add an expense to start tracking who owes what."
             ctaLabel="Add Expense"
-            onCta={() => router.push(`/groups/${id}/expenses/new`)}
+            ctaHref={`/groups/${id}/expenses/new`}
           />
         ) : (
           <div className="divide-y divide-gray-100">
